@@ -3,11 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice-Powered Medical Form</title>
-    <!-- 
-      NOTE: For a production environment, you should install Tailwind CSS
-      via npm/yarn and use a build process. The CDN is used here for simplicity.
-    -->
+    <title>Voice-Powered Medical Form (Full Conversation)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -17,28 +13,26 @@
             0%, 100% { opacity: 1; }
             50% { opacity: .5; }
         }
-        .form-field-pending { border-left-color: #9ca3af; } /* gray-400 */
-        .form-field-active { border-left-color: #3b82f6; } /* blue-500 */
-        .form-field-filled { border-left-color: #22c55e; } /* green-500 */
+        .form-field-pending { border-left-color: #9ca3af; }
+        .form-field-filled { border-left-color: #22c55e; }
+        .form-field-needs-review { border-left-color: #facc15; } /* yellow-400 */
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 flex items-center justify-center min-h-screen">
 
     <div class="container mx-auto p-4 md:p-8 max-w-4xl">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Voice-Powered Medical Form</h1>
-            <p class="text-gray-600 mt-2">Fill the patient's form by speaking. The system will automatically move to the next field.</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Medical Scribe AI</h1>
+            <p class="text-gray-600 mt-2">Record the entire patient consultation. The AI will fill the form automatically.</p>
         </header>
 
         <main class="bg-white rounded-2xl shadow-lg p-6 md:p-8">
-            <!-- Status Display -->
             <div id="status-container" class="text-center mb-6 p-4 rounded-lg bg-gray-100 border border-gray-200">
                 <p class="text-lg font-semibold text-gray-700">Status</p>
-                <p id="status-message" class="text-xl font-bold text-blue-600 min-h-[28px]">Press 'Start' to begin.</p>
+                <p id="status-message" class="text-xl font-bold text-blue-600 min-h-[28px]">Press 'Start Recording' to begin the consultation.</p>
                 <div id="loader" class="hidden animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto mt-2"></div>
             </div>
 
-            <!-- Recording Control -->
             <div class="flex justify-center mb-8">
                 <button id="record-button" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 ease-in-out transform hover:scale-105 flex items-center space-x-2">
                     <svg id="mic-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -46,106 +40,94 @@
                     </svg>
                     <span id="button-text">Start Recording</span>
                 </button>
-                 <button id="reset-button" class="ml-4 bg-red-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-red-600 focus:outline-none focus:ring-4 focus:ring-red-300 transition-all duration-300 ease-in-out transform hover:scale-105">
+                 <button id="reset-button" class="ml-4 bg-gray-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-300 transition-all duration-300 ease-in-out transform hover:scale-105">
                     Reset Form
                 </button>
             </div>
             
-            <!-- Dynamic Medical Form Container (now populated by JavaScript) -->
             <div id="medical-form" class="space-y-4">
-                <!-- Form fields will be dynamically inserted here -->
-            </div>
+                </div>
 
         </main>
     </div>
 
     <script>
-        // --- Data Initialization ---
-        // DEFINITIVE FIX: The form fields are now defined directly in JavaScript.
-        // This completely avoids the server-to-client data passing issue and the JSON.parse error.
-        // To add, remove, or change fields, you can now edit this array directly.
-        const formFields = [
-            { key: 'patient_name', label: "Patient's Name" },
-            { key: 'age', label: 'Age' },
-            { key: 'gender', label: 'Gender' },
-            { key: 'chief_complaint', label: 'Chief Complaint' },
-            { key: 'history_of_present_illness', label: 'History of Present Illness' },
-            { key: 'past_medical_history', label: 'Past Medical History' },
-            { key: 'medications', label: 'Current Medications' },
-            { key: 'allergies', label: 'Allergies' },
-            { key: 'family_history', label: 'Family History' },
-            { key: 'social_history', label: 'Social History (Tobacco, Alcohol, etc.)' },
-            { key: 'review_of_systems', label: 'Review of Systems' },
-            { key: 'vitals_bp', label: 'Blood Pressure' },
-            { key: 'vitals_hr', label: 'Heart Rate' },
-            { key: 'vitals_temp', label: 'Temperature' },
-        ];
+        // --- Data Initialization & Form Generation ---
+        const formFieldsSchema = {
+            'patient_name': "Patient's Name",
+            'age': 'Age',
+            'gender': 'Gender',
+            'chief_complaint': 'Chief Complaint',
+            'history_of_present_illness': 'History of Present Illness',
+            'past_medical_history': 'Past Medical History',
+            'medications': 'Current Medications',
+            'allergies': 'Allergies',
+            'family_history': 'Family History',
+            'social_history': 'Social History',
+            'review_of_systems': 'Review of Systems',
+            'vitals_bp': 'Blood Pressure',
+            'vitals_hr': 'Heart Rate',
+            'vitals_temp': 'Temperature',
+        };
 
+        const medicalForm = document.getElementById('medical-form');
         const recordButton = document.getElementById('record-button');
         const resetButton = document.getElementById('reset-button');
         const buttonText = document.getElementById('button-text');
         const statusMessage = document.getElementById('status-message');
         const loader = document.getElementById('loader');
-        const medicalForm = document.getElementById('medical-form');
 
-        let currentFieldIndex = 0;
         let isRecording = false;
         let mediaRecorder;
         let audioChunks = [];
 
-        // --- Core Functions ---
-        
         const createFormElements = () => {
-            medicalForm.innerHTML = ''; // Clear any existing content
-            formFields.forEach(field => {
+            medicalForm.innerHTML = '';
+            for (const key in formFieldsSchema) {
+                const labelText = formFieldsSchema[key];
                 const container = document.createElement('div');
-                container.id = `container-${field.key}`;
+                container.id = `container-${key}`;
                 container.className = 'p-4 rounded-lg border-l-4 form-field-pending bg-gray-50 transition-all duration-300';
 
                 const label = document.createElement('label');
-                label.htmlFor = field.key;
+                label.htmlFor = key;
                 label.className = 'block text-sm font-medium text-gray-500';
-                label.textContent = field.label;
+                label.textContent = labelText;
 
                 const input = document.createElement('input');
                 input.type = 'text';
-                input.id = field.key;
-                input.name = field.key;
+                input.id = key;
+                input.name = key;
                 input.className = 'mt-1 block w-full bg-white border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-lg p-2 text-gray-900 font-semibold';
-                input.placeholder = 'Waiting for voice input...';
+                input.placeholder = '...';
 
                 container.appendChild(label);
                 container.appendChild(input);
                 medicalForm.appendChild(container);
-            });
+            }
         };
 
+        // --- Core Functions ---
         const startRecording = () => {
-            if (currentFieldIndex >= formFields.length) {
-                updateStatus("All fields are filled!", "green");
-                return;
-            }
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(stream => {
-                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
                     mediaRecorder.start();
                     isRecording = true;
 
                     buttonText.textContent = 'Stop Recording';
                     recordButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
                     recordButton.classList.add('bg-red-600', 'hover:bg-red-700', 'status-pulse');
+                    resetButton.disabled = true;
+                    resetButton.classList.add('opacity-50');
                     
-                    updateActiveField();
-                    updateStatus(`Listening for ${formFields[currentFieldIndex].label}...`, 'blue');
+                    updateStatus('Recording consultation...', 'red');
 
-                    mediaRecorder.addEventListener("dataavailable", event => {
-                        audioChunks.push(event.data);
-                    });
-
+                    mediaRecorder.addEventListener("dataavailable", event => audioChunks.push(event.data));
                     mediaRecorder.addEventListener("stop", processAudio);
                 })
                 .catch(err => {
-                    console.error("Error accessing microphone:", err);
+                    console.error("Mic access error:", err);
                     updateStatus("Error: Could not access microphone.", "red");
                 });
         };
@@ -157,16 +139,16 @@
                 buttonText.textContent = 'Processing...';
                 recordButton.disabled = true;
                 recordButton.classList.remove('bg-red-600', 'hover:bg-red-700', 'status-pulse');
-                recordButton.classList.add('bg-gray-500');
+                recordButton.classList.add('bg-gray-500', 'opacity-50');
                 loader.classList.remove('hidden');
+                updateStatus('Transcribing and analyzing... Please wait.', 'blue');
             }
         };
 
         const processAudio = async () => {
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
             const formData = new FormData();
-            formData.append('audio_data', audioBlob, 'recording.webm');
-            formData.append('field_key', formFields[currentFieldIndex].key);
+            formData.append('audio_data', audioBlob, 'consultation.webm');
 
             try {
                 const response = await fetch('/process_audio', {
@@ -175,7 +157,8 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Server error: ${response.statusText}`);
+                    const errorResult = await response.json();
+                    throw new Error(errorResult.error || `Server error: ${response.statusText}`);
                 }
 
                 const result = await response.json();
@@ -189,15 +172,10 @@
                 recordButton.disabled = false;
                 buttonText.textContent = 'Start Recording';
                 recordButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                recordButton.classList.remove('bg-gray-500');
+                recordButton.classList.remove('bg-gray-500', 'opacity-50');
+                resetButton.disabled = false;
+                resetButton.classList.remove('opacity-50');
                 loader.classList.add('hidden');
-                
-                if (currentFieldIndex < formFields.length) {
-                    setTimeout(() => recordButton.click(), 500); 
-                } else {
-                     updateStatus('Form complete!', 'green');
-                     recordButton.disabled = true;
-                }
             }
         };
 
@@ -207,31 +185,33 @@
                 return;
             }
 
-            const fieldKey = result.field_filled;
-            const extractedData = result.extracted_data;
-            const inputElement = document.getElementById(fieldKey);
+            const data = result.extracted_data;
+            let filledCount = 0;
+            for (const key in data) {
+                const inputElement = document.getElementById(key);
+                if (inputElement) {
+                    const value = data[key];
+                    inputElement.value = value;
 
-            if (inputElement && extractedData) {
-                inputElement.value = extractedData;
-                const container = document.getElementById(`container-${fieldKey}`);
-                container.classList.remove('form-field-active');
-                container.classList.add('form-field-filled');
+                    const container = document.getElementById(`container-${key}`);
+                    container.classList.remove('form-field-pending', 'form-field-needs-review');
+                    
+                    if(value) {
+                       container.classList.add('form-field-filled');
+                       filledCount++;
+                    } else {
+                        // Mark empty fields for review
+                       container.classList.add('form-field-needs-review');
+                    }
+                }
             }
-            
-            currentFieldIndex++;
-            
-            if (currentFieldIndex >= formFields.length) {
-                 updateStatus('Form complete! Press Reset to start over.', 'green');
-                 recordButton.disabled = true;
-                 buttonText.textContent = 'Complete';
-            }
+            updateStatus(`Analysis complete. ${filledCount} fields were filled. Please review.`, 'green');
         };
 
-        // --- UI Update Functions ---
-
+        // --- UI Update & Event Listeners ---
         const updateStatus = (message, color) => {
             statusMessage.textContent = message;
-            statusMessage.className = `text-xl font-bold min-h-[28px]`; // Reset classes
+            statusMessage.className = `text-xl font-bold min-h-[28px]`;
             const colorClasses = {
                 blue: 'text-blue-600',
                 green: 'text-green-600',
@@ -241,31 +221,14 @@
                 statusMessage.classList.add(colorClasses[color]);
             }
         };
-        
-        const updateActiveField = () => {
-            document.querySelectorAll('.form-field-active').forEach(el => {
-                el.classList.remove('form-field-active');
-            });
-
-            if (currentFieldIndex < formFields.length) {
-                const currentFieldKey = formFields[currentFieldIndex].key;
-                const container = document.getElementById(`container-${currentFieldKey}`);
-                container.classList.remove('form-field-pending');
-                container.classList.add('form-field-active');
-                container.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        };
 
         const resetForm = () => {
-            // Re-create the form elements to reset them
             createFormElements();
-            currentFieldIndex = 0;
+            updateStatus("Press 'Start Recording' to begin the consultation.", 'blue');
             recordButton.disabled = false;
             buttonText.textContent = 'Start Recording';
-            updateStatus("Press 'Start' to begin.", 'blue');
         };
 
-        // --- Event Listeners ---
         recordButton.addEventListener('click', () => {
             if (isRecording) {
                 stopRecording();
@@ -276,14 +239,7 @@
 
         resetButton.addEventListener('click', resetForm);
         
-        // --- Initial Setup ---
-        document.addEventListener('DOMContentLoaded', () => {
-            createFormElements();
-            updateStatus("Press 'Start' to begin.", 'blue');
-        });
-
+        document.addEventListener('DOMContentLoaded', createFormElements);
     </script>
 </body>
 </html>
-
-
