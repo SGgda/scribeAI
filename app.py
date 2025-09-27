@@ -7,6 +7,7 @@ import uuid
 import json
 
 # --- Configuration ---
+# --- Configuration ---
 try:
     genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
 except KeyError:
@@ -28,23 +29,37 @@ except Exception as e:
 
 gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 
-# This list is now used to construct the JSON schema for the AI
-FORM_FIELDS_SCHEMA = {
-    'patient_name': "Patient's Full Name",
-    'age': 'Age in years',
-    'gender': 'Gender (e.g., Male, Female, Other)',
-    'chief_complaint': 'The main reason for the visit, in the patient\'s own words.',
-    'history_of_present_illness': 'A detailed story of the chief complaint.',
-    'past_medical_history': 'Any significant past illnesses or surgeries.',
-    'medications': 'List of current medications.',
-    'allergies': 'Any known allergies, especially to medication.',
-    'family_history': 'Significant illnesses in the patient\'s family.',
-    'social_history': 'Details on tobacco, alcohol, or drug use.',
-    'review_of_systems': 'A summary of other potential symptoms mentioned.',
-    'vitals_bp': 'Blood Pressure (e.g., "120/80")',
-    'vitals_hr': 'Heart Rate (beats per minute)',
-    'vitals_temp': 'Temperature'
+
+# --- VOICE-FILLABLE SCHEMA ---
+# This schema ONLY includes the fields that we want the AI to fill via voice.
+VOICE_FILLABLE_SCHEMA = {
+    'organised_by': "The name of the organization conducting the event.",
+    'department': "The specific department involved.",
+    'event_date': "The date of the event.",
+    'event_place': "The city or location of the event.",
+    'event_district': "The district where the event is taking place.",
+    'patient_name': "The patient's full name.",
+    'patient_age': "The patient's age in years.",
+    'patient_contact': "The patient's contact phone number.",
+    'patient_education': "The patient's educational qualifications.",
+    'family_monthly_income': "The monthly income of the patient's family.",
+    'chief_complaint': "The primary medical or dental complaint from the patient, in their own words.",
+    'past_medical_history_others': "Any other past medical conditions mentioned that are not in the Yes/No list.",
+    'past_dental_visit_details': "Details about the last dental visit if mentioned (e.g., 'about a year ago for a cleaning').",
+    'personal_habits_others': "Any other personal habits mentioned besides smoking or alcohol.",
+    'clinical_decayed': "Description or count of decayed teeth.",
+    'clinical_missing': "Description or count of missing teeth.",
+    'clinical_filled': "Description or count of filled teeth.",
+    'clinical_pain': "Details about any dental pain the patient is experiencing.",
+    'clinical_fractured_teeth': "Details about any fractured teeth.",
+    'clinical_mobility': "Details about any mobile or loose teeth.",
+    'clinical_examination_others': "Any other clinical findings mentioned.",
+    'oral_mucosal_lesion': "Description of any oral mucosal lesions observed.",
+    'teeth_cleaning_method': "The method the patient uses for cleaning their teeth (e.g., 'brush and paste twice a day').",
+    'doctors_name': "The name of the examining doctor.",
+    'treatment_plan': "The proposed treatment plan based on the examination."
 }
+
 
 # --- Flask Routes ---
 
@@ -54,9 +69,8 @@ def index():
 
 @app.route('/process_audio', methods=['POST'])
 def process_audio():
-    print("\n--- Request received for full conversation processing ---")
+    print("\n--- Request received for detailed form processing ---")
     if 'audio_data' not in request.files:
-        print("Error: 'audio_data' not in request.files")
         return jsonify({'error': 'No audio file found'}), 400
 
     audio_file = request.files['audio_data']
@@ -75,20 +89,25 @@ def process_audio():
             return jsonify({'error': 'No speech detected.'})
 
         # 2. Use a sophisticated prompt to extract all fields into a JSON object
-        print("Extracting all fields with Gemini...")
+        print("Extracting structured data with Gemini...")
         
-        # We create a string representing the desired JSON keys from our schema
-        json_keys = ", ".join(f'"{key}"' for key in FORM_FIELDS_SCHEMA.keys())
+        # Create a string representing the desired JSON keys from our new schema
+        schema_description = "\n".join([f'- "{key}": "{description}"' for key, description in VOICE_FILLABLE_SCHEMA.items()])
 
         prompt = f"""
-        You are an expert medical scribe. Your task is to analyze a conversation transcript between a doctor and a patient and extract key information into a structured JSON object.
-        
-        - The JSON object must only contain the following keys: {json_keys}.
-        - For each key, extract the corresponding information from the transcript.
-        - If a piece of information for a specific key is not mentioned in the transcript, the value for that key should be an empty string "".
-        - Translate any non-English information (e.g., Hindi, Tamil) into English before filling the value.
-        - Normalize data: write ages and vital signs as digits. Format blood pressure as "systolic/diastolic".
-        - Your final output MUST be a single, valid JSON object and nothing else. Do not include any explanatory text before or after the JSON.
+        You are an expert medical scribe specializing in dental forms. Your task is to analyze a conversation transcript and extract key information into a structured JSON object.
+
+        Analyze the transcript and fill in the values for the following JSON schema. ONLY fill the fields listed below. Do not attempt to answer Yes/No questions.
+
+        JSON Schema to fill:
+        {schema_description}
+
+        Extraction Rules:
+        - The JSON object must only contain the keys listed in the schema above.
+        - If information for a key is not in the transcript, the value must be an empty string "".
+        - Translate any non-English information (e.g., Hindi, Tamil) into English.
+        - Normalize data: write ages and numbers as digits. Format dates clearly.
+        - Your final output MUST be a single, valid JSON object and nothing else. Do not add explanations.
 
         Transcript:
         ---
@@ -101,7 +120,6 @@ def process_audio():
         response = gemini_model.generate_content(prompt)
         
         # Clean the response to get a valid JSON string
-        # LLMs sometimes wrap the JSON in ```json ... ``` or add extra text.
         response_text = response.text.strip().replace('```json', '').replace('```', '')
         print(f"Gemini Raw Response: {response_text}")
 
@@ -116,7 +134,7 @@ def process_audio():
 
     except json.JSONDecodeError:
         print("Error: Failed to decode JSON from Gemini's response.")
-        return jsonify({'error': "The AI failed to return valid JSON. Please check the server logs."}), 500
+        return jsonify({'error': "AI response was not valid JSON. Please check server logs."}), 500
     except Exception as e:
         print(f"An error occurred: {e}")
         return jsonify({'error': str(e)}), 500
