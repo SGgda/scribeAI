@@ -6,7 +6,9 @@ from flask_cors import CORS
 import uuid
 import json
 
-
+# --- Configuration ---
+# --- Configuration ---
+os.environ["GOOGLE_API_KEY"] = "AIzaSyBTeznkQ4b8-Y0G0r-3PaoOsbzptJzvdDw" 
 try:
     genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
 except KeyError:
@@ -29,7 +31,8 @@ except Exception as e:
 gemini_model = genai.GenerativeModel('gemini-2.5-flash')
 
 
-
+# --- VOICE-FILLABLE SCHEMA ---
+# This schema ONLY includes the fields that we want the AI to fill via voice.
 VOICE_FILLABLE_SCHEMA = {
     'organised_by': "The name of the organization conducting the event.",
     'department': "The specific department involved.",
