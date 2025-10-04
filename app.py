@@ -8,7 +8,7 @@ import json
 
 # --- Configuration ---
 # --- Configuration ---
-os.environ["GOOGLE_API_KEY"] = "AIzaSyBTeznkQ4b8-Y0G0r-3PaoOsbzptJzvdDw" 
+
 try:
     genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
 except KeyError:
