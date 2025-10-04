@@ -6,8 +6,7 @@ from flask_cors import CORS
 import uuid
 import json
 
-# --- Configuration ---
-# --- Configuration ---
+
 try:
     genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
 except KeyError:
@@ -27,11 +26,10 @@ except Exception as e:
     print(f"Error loading Whisper model: {e}")
     exit()
 
-gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+gemini_model = genai.GenerativeModel('gemini-2.5-flash')
 
 
-# --- VOICE-FILLABLE SCHEMA ---
-# This schema ONLY includes the fields that we want the AI to fill via voice.
+
 VOICE_FILLABLE_SCHEMA = {
     'organised_by': "The name of the organization conducting the event.",
     'department': "The specific department involved.",
@@ -63,9 +61,7 @@ VOICE_FILLABLE_SCHEMA = {
 
 # --- Flask Routes ---
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+
 
 @app.route('/process_audio', methods=['POST'])
 def process_audio():
@@ -143,6 +139,40 @@ def process_audio():
             os.remove(temp_audio_path)
             print(f"Cleaned up temp file: {temp_audio_path}")
 
+# --- A new, simpler route for transcribing single fields ---
+@app.route('/transcribe', methods=['POST'])
+def transcribe_field():
+    print("\n--- Request received for single field transcription ---")
+    if 'audio_data' not in request.files:
+        return jsonify({'error': 'No audio file found'}), 400
+
+    audio_file = request.files['audio_data']
+    # Use a unique filename to avoid conflicts
+    temp_audio_path = f"temp_audio_{uuid.uuid4()}.webm"
+    audio_file.save(temp_audio_path)
+    print(f"Audio saved to: {temp_audio_path}")
+
+    try:
+        # 1. Transcribe the audio
+        print("Transcribing audio...")
+        # Using fp16=False is recommended for higher accuracy
+        result = whisper_model.transcribe(temp_audio_path, fp16=False)
+        transcribed_text = result['text']
+        print(f"Transcription result: '{transcribed_text}'")
+
+        if not transcribed_text.strip():
+            return jsonify({'text': ''}) # Return empty if no speech detected
+
+        # 2. Return the transcribed text
+        return jsonify({'text': transcribed_text})
+
+    except Exception as e:
+        print(f"An error occurred during transcription: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        # 3. Clean up the temporary file
+        if os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path)
+            print(f"Cleaned up temp file: {temp_audio_path}")
 if __name__ == '__main__':
     app.run(debug=True)
-
