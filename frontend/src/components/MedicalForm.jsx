@@ -36,6 +36,9 @@ const MedicalForm = forwardRef(({ onStatusChange }, ref) => {
         // Used by the global reset button
         resetForm: () => {
             setFormData(getInitialState());
+        },
+        getFormData: () => {
+            return { ...formData }; // Return a copy of all current field values
         }
     }));
 

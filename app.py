@@ -5,12 +5,14 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import uuid
 import json
+from dotenv import load_dotenv # <-- 1. IMPORT THE LIBRARY
 
 # --- Configuration ---
-# --- Configuration ---
+load_dotenv() # <-- 2. LOAD THE .env FILE
 
 try:
-    genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+    # This will now find the key loaded from your .env file
+    genai.configure(api_key=os.environ["GOOGLE_API_KEY"]) 
 except KeyError:
     print("FATAL: GOOGLE_API_KEY environment variable not set.")
     exit()
